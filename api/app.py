@@ -6,7 +6,6 @@ from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, JSONResponse
 from PIL import Image, ImageEnhance, ImageOps
-from rembg import remove, new_session
 
 app = FastAPI(title='Removedor de Fundo IA')
 
@@ -19,13 +18,19 @@ app.add_middleware(
 )
 
 SESSION = None
+REMOVE_FN = None
+NEW_SESSION_FN = None
 
 
-def get_session():
-    global SESSION
+def load_rembg():
+    global SESSION, REMOVE_FN, NEW_SESSION_FN
+    if REMOVE_FN is None or NEW_SESSION_FN is None:
+        from rembg import remove, new_session
+        REMOVE_FN = remove
+        NEW_SESSION_FN = new_session
     if SESSION is None:
-        SESSION = new_session(os.getenv('REMBG_MODEL', 'u2net'))
-    return SESSION
+        SESSION = NEW_SESSION_FN(os.getenv('REMBG_MODEL', 'u2net'))
+    return REMOVE_FN, SESSION
 
 
 def improve_quality(img: Image.Image) -> Image.Image:
@@ -54,6 +59,11 @@ def crop_transparent(img: Image.Image) -> Image.Image:
     return rgba.crop((left, top, right, bottom))
 
 
+@app.get('/')
+def root():
+    return {'ok': True, 'service': 'removedor-fundo-api'}
+
+
 @app.get('/health')
 def health():
     return {'ok': True}
@@ -65,20 +75,24 @@ async def process_image(request: Request):
         payload = await request.json()
         image_b64 = payload.get('image_base64', '')
         crop = bool(payload.get('crop', True))
+        if not image_b64:
+            raise HTTPException(status_code=400, detail='Imagem não enviada.')
         if ',' in image_b64:
             image_b64 = image_b64.split(',', 1)[1]
         raw = base64.b64decode(image_b64)
         if len(raw) > 20 * 1024 * 1024:
             raise HTTPException(status_code=413, detail='Imagem muito grande. Limite: 20 MB.')
         img = Image.open(io.BytesIO(raw)).convert('RGBA')
-        max_side = 2200
+        max_side = 1800
         w, h = img.size
         if max(w, h) > max_side:
             scale = max_side / max(w, h)
             img = img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
-        out_bytes = remove(
+
+        remove_fn, session = load_rembg()
+        out_bytes = remove_fn(
             img,
-            session=get_session(),
+            session=session,
             alpha_matting=True,
             alpha_matting_foreground_threshold=240,
             alpha_matting_background_threshold=10,
