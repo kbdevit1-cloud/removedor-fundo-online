@@ -1,61 +1,47 @@
 # Removedor de Fundo IA Online
 
-Projeto com frontend online e API Python para remover fundo de imagens com melhor qualidade.
-
-## Estrutura
+Projeto com:
 
 - `frontend/`: site estático para GitHub Pages.
-- `api/`: API FastAPI com `rembg`/U2Net.
-- `.github/workflows/pages.yml`: workflow para publicar o frontend no GitHub Pages.
-- `render.yaml`: configuração para publicar a API no Render.
+- `backend/`: API FastAPI com `rembg`/U2Net para remover fundo com melhor qualidade.
 
 ## Importante
 
-O GitHub Pages hospeda apenas HTML, CSS e JavaScript. Ele não roda Python. Por isso o projeto foi separado em duas partes:
-
-1. **Frontend no GitHub Pages**: tela online para enviar imagem e baixar PNG.
-2. **API em Render/Railway/VPS**: processamento Python com IA para remover fundo.
+GitHub Pages hospeda apenas o frontend estático. O processamento pesado em Python precisa ficar em um backend separado, por exemplo Render, Railway, VPS ou servidor interno.
 
 ## Publicar frontend no GitHub Pages
 
-1. Vá em `Settings > Pages`.
-2. Em `Build and deployment`, selecione `GitHub Actions`.
-3. Faça um push/commit na branch `main`.
-4. O workflow publica automaticamente a pasta `frontend/`.
+1. Crie um repositório no GitHub, por exemplo `removedor-fundo-online`.
+2. Envie todos estes arquivos para o repositório.
+3. Vá em `Settings > Pages`.
+4. Em `Build and deployment`, selecione `GitHub Actions`.
+5. O workflow `.github/workflows/pages.yml` publica o conteúdo da pasta `frontend/`.
 
-## Publicar API no Render
+## Publicar backend no Render
 
-Crie um Web Service no Render usando este repositório.
+1. Crie um Web Service no Render conectado ao mesmo repositório.
+2. Use:
+   - Root Directory: `backend`
+   - Build Command: `pip install -r requirements.txt`
+   - Start Command: `uvicorn app:app --host 0.0.0.0 --port $PORT`
+3. Variáveis opcionais:
+   - `REMBG_MODEL=u2net`
+   - `CORS_ORIGINS=*`
 
-Configuração recomendada:
+Depois de publicado, copie a URL do backend, por exemplo:
 
-- Root Directory: `api`
-- Build Command: `pip install -r requirements.txt`
-- Start Command: `uvicorn app:app --host 0.0.0.0 --port $PORT`
+`https://removedor-fundo-api.onrender.com`
 
-Variáveis opcionais:
-
-- `REMBG_MODEL=u2net`
-- `CORS_ORIGINS=*`
-
-Depois de publicar, copie a URL da API e cole no campo **URL do backend** no site.
-
-Exemplo:
-
-```txt
-https://removedor-fundo-api.onrender.com
-```
+Cole essa URL no campo "URL do backend" no site.
 
 ## Rodar localmente
 
 ```bash
-cd api
+cd backend
 pip install -r requirements.txt
 uvicorn app:app --reload
 ```
 
 Abra `frontend/index.html` e use como URL do backend:
 
-```txt
-http://127.0.0.1:8000
-```
+`http://127.0.0.1:8000`
