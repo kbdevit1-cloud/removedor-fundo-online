@@ -33,6 +33,14 @@ def load_rembg():
     return REMOVE_FN, SESSION
 
 
+def parse_bool(value, default=False):
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in {'1', 'true', 'yes', 'sim', 'on'}
+
+
 def improve_quality(img: Image.Image) -> Image.Image:
     rgba = img.convert('RGBA')
     alpha = rgba.getchannel('A')
@@ -59,6 +67,29 @@ def crop_transparent(img: Image.Image) -> Image.Image:
     return rgba.crop((left, top, right, bottom))
 
 
+async def read_request_image(request: Request):
+    content_type = request.headers.get('content-type', '').lower()
+
+    if 'multipart/form-data' in content_type:
+        form = await request.form()
+        upload = form.get('image') or form.get('file')
+        if upload is None:
+            raise HTTPException(status_code=400, detail='Imagem não enviada.')
+        raw = await upload.read()
+        crop = parse_bool(form.get('crop'), True)
+        return raw, crop
+
+    payload = await request.json()
+    image_b64 = payload.get('image_base64', '')
+    crop = parse_bool(payload.get('crop'), True)
+    if not image_b64:
+        raise HTTPException(status_code=400, detail='Imagem não enviada.')
+    if ',' in image_b64:
+        image_b64 = image_b64.split(',', 1)[1]
+    raw = base64.b64decode(image_b64)
+    return raw, crop
+
+
 @app.get('/')
 def root():
     return {'ok': True, 'service': 'removedor-fundo-api'}
@@ -72,16 +103,10 @@ def health():
 @app.post('/api/remove-bg')
 async def process_image(request: Request):
     try:
-        payload = await request.json()
-        image_b64 = payload.get('image_base64', '')
-        crop = bool(payload.get('crop', True))
-        if not image_b64:
-            raise HTTPException(status_code=400, detail='Imagem não enviada.')
-        if ',' in image_b64:
-            image_b64 = image_b64.split(',', 1)[1]
-        raw = base64.b64decode(image_b64)
+        raw, crop = await read_request_image(request)
         if len(raw) > 20 * 1024 * 1024:
             raise HTTPException(status_code=413, detail='Imagem muito grande. Limite: 20 MB.')
+
         img = Image.open(io.BytesIO(raw)).convert('RGBA')
         max_side = 1800
         w, h = img.size
